@@ -30,7 +30,8 @@ jobs:
           set -e
           echo "Searching artifact..."
           find . -name "libapriltag*.a" -print
-          ARTIF=$(find . -name "libapriltag*.a" -type f | head -n 1)
+          ARTIF=$(find ${{ github.workspace }}/install-ios -name "libapriltag*.a" -type f 2>/dev/null | head -n 1)
+          [ -z "$ARTIF" ] && ARTIF=$(find . -name "libapriltag*.a" -type f | head -n 1)
           if [ -z "$ARTIF" ]; then echo "libapriltag.a not found"; exit 1; fi
           cp "$ARTIF" libAprilTag.a
           ls -lah libAprilTag.a
