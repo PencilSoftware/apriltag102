@@ -24,6 +24,108 @@ jobs:
         run: |
           sed -i.bak -E "s/add_executable\( *apriltag_demo /add_executable(apriltag_demo EXCLUDE_FROM_ALL /" apriltag/CMakeLists.txt || true
           echo "set_target_properties(apriltag_demo PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.example.apriltagdemo)" >> apriltag/CMakeLists.txt
+      - name: Add unity_ext API
+        run: |
+          cat > apriltag/unity_ext.h <<'EOF'
+#pragma once
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int estimate_pose_from_corners(
+  const double* px, const double* py,
+  double tag_size,
+  double fx, double fy, double cx, double cy,
+  double* R_out,
+  double* t_out);
+
+#ifdef __cplusplus
+}
+#endif
+
+EOF
+          cat > apriltag/unity_ext.c <<'EOF'
+#include <math.h>
+#include <string.h>
+#include "unity_ext.h"
+
+static int solve8x8(double A[8][8], double b[8], double x[8])
+{
+  double M[8][9];
+  for (int i=0;i<8;i++){ for (int j=0;j<8;j++) M[i][j]=A[i][j]; M[i][8]=b[i]; }
+  for (int col=0; col<8; col++){
+    int piv=col; double maxA=fabs(M[piv][col]);
+    for (int r=col+1;r<8;r++){ double v=fabs(M[r][col]); if (v>maxA){maxA=v;piv=r;} }
+    if (maxA < 1e-12) return -1;
+    if (piv!=col){ for (int c=col;c<9;c++){ double tmp=M[col][c]; M[col][c]=M[piv][c]; M[piv][c]=tmp; } }
+    double div = M[col][col];
+    for (int c=col;c<9;c++) M[col][c]/=div;
+    for (int r=0;r<8;r++) if (r!=col){ double f=M[r][col]; for (int c=col;c<9;c++) M[r][c]-=f*M[col][c]; }
+  }
+  for (int i=0;i<8;i++) x[i]=M[i][8];
+  return 0;
+}
+
+int estimate_pose_from_corners(
+  const double* px, const double* py,
+  double tag_size,
+  double fx, double fy, double cx, double cy,
+  double* R_out,
+  double* t_out)
+{
+  if (!px || !py || !R_out || !t_out) return -1;
+  // Object points on tag plane (Z=0), centered at origin
+  double s = tag_size;
+  double X[4] = {-s/2,  s/2,  s/2, -s/2};
+  double Y[4] = {-s/2, -s/2,  s/2,  s/2};
+
+  // DLT for homography (h33 = 1)
+  double A[8][8]; double b[8]; memset(A,0,sizeof(A)); memset(b,0,sizeof(b));
+  for (int i=0;i<4;i++){
+    double Xi=X[i], Yi=Y[i]; double u=px[i], v=py[i]; int r=i*2;
+    A[r][0]=Xi; A[r][1]=Yi; A[r][2]=1; A[r][6]=-u*Xi; A[r][7]=-u*Yi; b[r]=u;
+    A[r+1][3]=Xi; A[r+1][4]=Yi; A[r+1][5]=1; A[r+1][6]=-v*Xi; A[r+1][7]=-v*Yi; b[r+1]=v;
+  }
+  double h[8]; if (solve8x8(A,b,h)!=0) return -2;
+  double H[3][3]={{h[0],h[1],h[2]},{h[3],h[4],h[5]},{h[6],h[7],1.0}};
+
+  // K^{-1} * H
+  double invK[3][3]={{1.0/fx,0,-cx/fx},{0,1.0/fy,-cy/fy},{0,0,1}};
+  double B[3][3];
+  for (int i=0;i<3;i++){ for (int j=0;j<3;j++){ B[i][j]=0; for (int k=0;k<3;k++) B[i][j]+=invK[i][k]*H[k][j]; } }
+
+  // Columns
+  double b1[3]={B[0][0],B[1][0],B[2][0]};
+  double b2[3]={B[0][1],B[1][1],B[2][1]};
+  double b3[3]={B[0][2],B[1][2],B[2][2]};
+  double s1 = sqrt(b1[0]*b1[0]+b1[1]*b1[1]+b1[2]*b1[2]);
+  double s2 = sqrt(b2[0]*b2[0]+b2[1]*b2[1]+b2[2]*b2[2]);
+  if (s1<1e-9 || s2<1e-9) return -3;
+  double scale = 0.5*(s1+s2);
+  double r1[3]={b1[0]/s1, b1[1]/s1, b1[2]/s1};
+  double r2[3]={b2[0]/s2, b2[1]/s2, b2[2]/s2};
+  double r3[3]={ r1[1]*r2[2]-r1[2]*r2[1], r1[2]*r2[0]-r1[0]*r2[2], r1[0]*r2[1]-r1[1]*r2[0] };
+  // Re-orthogonalize r2 = r3 x r1
+  r2[0]= r3[1]*r1[2]-r3[2]*r1[1];
+  r2[1]= r3[2]*r1[0]-r3[0]*r1[2];
+  r2[2]= r3[0]*r1[1]-r3[1]*r1[0];
+
+  // Rotation row-major
+  R_out[0]=r1[0]; R_out[1]=r2[0]; R_out[2]=r3[0];
+  R_out[3]=r1[1]; R_out[4]=r2[1]; R_out[5]=r3[1];
+  R_out[6]=r1[2]; R_out[7]=r2[2]; R_out[8]=r3[2];
+
+  // Translation (camera frame)
+  t_out[0]=b3[0]/scale; t_out[1]=b3[1]/scale; t_out[2]=b3[2]/scale;
+  return 0;
+}
+
+EOF
+          echo 'target_sources(apriltag PRIVATE unity_ext.c)' >> apriltag/CMakeLists.txt
+        run: |
+          sed -i.bak -E "s/add_executable\( *apriltag_demo /add_executable(apriltag_demo EXCLUDE_FROM_ALL /" apriltag/CMakeLists.txt || true
+          echo "set_target_properties(apriltag_demo PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.example.apriltagdemo)" >> apriltag/CMakeLists.txt
       - name: Configure
         run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
       - name: Build
