@@ -24,8 +24,16 @@ jobs:
         run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
       - name: Build
         run: xcodebuild -project build-ios/apriltag.xcodeproj -configuration Release -sdk iphoneos -arch arm64 build | cat && ls -lah build-ios/Release-iphoneos || true
-      - name: Rename
-        run: cp build-ios/Release-iphoneos/libapriltag.a libAprilTag.a
+      - name: Collect artifact
+        shell: bash
+        run: |
+          set -e
+          echo "Searching artifact..."
+          find build-ios -name "libapriltag.a" -print
+          ARTIF=$(find build-ios -name "libapriltag.a" -type f | head -n 1)
+          if [ -z "$ARTIF" ]; then echo "libapriltag.a not found"; exit 1; fi
+          cp "$ARTIF" libAprilTag.a
+          ls -lah libAprilTag.a
       - name: Verify symbols
         run: nm -gU libAprilTag.a | egrep "estimate_tag_pose|apriltag_detector_(create|destroy|detect)" || true
       - uses: actions/upload-artifact@v4
