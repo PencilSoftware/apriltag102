@@ -1,0 +1,31 @@
+name: build-apriltag-ios
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      apriltag_commit:
+        description: "keijiro/apriltag commit (optional)"
+        required: false
+        default: ""
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure CMake
+        run: brew install cmake || true
+      - name: Clone keijiro/apriltag
+        run: git clone --depth 1 https://github.com/keijiro/apriltag.git apriltag && if [ -n "${{ github.event.inputs.apriltag_commit }}" ]; then cd apriltag && git fetch --depth 1 origin ${{ github.event.inputs.apriltag_commit }} && git checkout ${{ github.event.inputs.apriltag_commit }} && cd ..; fi
+      - name: Configure
+        run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
+      - name: Build
+        run: xcodebuild -project build-ios/apriltag.xcodeproj -configuration Release -sdk iphoneos -arch arm64 build | cat && ls -lah build-ios/Release-iphoneos || true
+      - name: Rename
+        run: cp build-ios/Release-iphoneos/libapriltag.a libAprilTag.a
+      - name: Verify symbols
+        run: nm -gU libAprilTag.a | egrep "estimate_tag_pose|apriltag_detector_(create|destroy|detect)" || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libAprilTag-ios-arm64
+          path: libAprilTag.a
