@@ -17,6 +17,9 @@ jobs:
         run: brew install cmake || true
       - name: Clone keijiro/apriltag
         run: git clone --depth 1 https://github.com/keijiro/apriltag.git apriltag && if [ -n "${{ github.event.inputs.apriltag_commit }}" ]; then cd apriltag && git fetch --depth 1 origin ${{ github.event.inputs.apriltag_commit }} && git checkout ${{ github.event.inputs.apriltag_commit }} && cd ..; fi
+      - name: Patch CMake to skip demo install
+        run: |
+          sed -i.bak -e 's/^install( *TARGETS *apriltag_demo/# &/' apriltag/CMakeLists.txt || true
       - name: Configure
         run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
       - name: Build
