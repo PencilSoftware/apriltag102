@@ -21,6 +21,9 @@ jobs:
         run: |
           sed -i.bak -e 's/^install( *TARGETS *apriltag_demo/# &/' apriltag/CMakeLists.txt || true
       - name: Disable apriltag_demo target
+        run: |
+          sed -i.bak -E "s/add_executable\( *apriltag_demo /add_executable(apriltag_demo EXCLUDE_FROM_ALL /" apriltag/CMakeLists.txt || true
+          echo "set_target_properties(apriltag_demo PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.example.apriltagdemo)" >> apriltag/CMakeLists.txt
       - name: Add unity_ext API
         run: |
           cat > apriltag/unity_ext.h <<'EOF'
