@@ -20,6 +20,10 @@ jobs:
       - name: Patch CMake to skip demo install
         run: |
           sed -i.bak -e 's/^install( *TARGETS *apriltag_demo/# &/' apriltag/CMakeLists.txt || true
+      - name: Disable apriltag_demo target
+        run: |
+          sed -i.bak -E "s/add_executable\( *apriltag_demo /add_executable(apriltag_demo EXCLUDE_FROM_ALL /" apriltag/CMakeLists.txt || true
+          echo "set_target_properties(apriltag_demo PROPERTIES XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.example.apriltagdemo)" >> apriltag/CMakeLists.txt
       - name: Configure
         run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
       - name: Build
