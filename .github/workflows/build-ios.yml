@@ -44,7 +44,7 @@ jobs:
           }
           #endif
           
-EOF
+          EOF
           cat > apriltag/unity_ext.c <<'EOF'
           #include <math.h>
           #include <string.h>
@@ -121,7 +121,7 @@ EOF
             return 0;
           }
           
-EOF
+          EOF
           echo 'target_sources(apriltag PRIVATE unity_ext.c)' >> apriltag/CMakeLists.txt
       - name: Configure
         run: cmake -S apriltag -B build-ios -G Xcode -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DBUILD_PYTHON_WRAPPER=OFF -DBUILD_EXAMPLES=OFF
