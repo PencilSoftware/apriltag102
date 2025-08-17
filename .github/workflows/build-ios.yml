@@ -33,12 +33,17 @@ jobs:
         run: |
           set -e
           echo "Searching artifact..."
-          find . -name "libapriltag*.a" -print
-          ARTIF=$(find ${{ github.workspace }}/install-ios -name "libapriltag*.a" -type f 2>/dev/null | head -n 1)
-          [ -z "$ARTIF" ] && ARTIF=$(find . -name "libapriltag*.a" -type f | head -n 1)
-          if [ -z "$ARTIF" ]; then echo "libapriltag.a not found"; exit 1; fi
+          if [ -f build-ios/Release-iphoneos/libapriltag.a ]; then
+            ARTIF=build-ios/Release-iphoneos/libapriltag.a
+          else
+            ARTIF=$(find ${{ github.workspace }}/install-ios -name "libapriltag*.a" -type f 2>/dev/null | head -n 1)
+            [ -z "$ARTIF" ] && ARTIF=$(find . -name "libapriltag*.a" -type f | head -n 1)
+          fi
+          echo "$ARTIF"
+          if [ -z "$ARTIF" ] || [ ! -f "$ARTIF" ]; then echo "libapriltag.a not found"; exit 1; fi
           cp "$ARTIF" libAprilTag.a
           ls -lah libAprilTag.a
+
       - name: Verify symbols
         run: nm -gU libAprilTag.a | egrep "estimate_tag_pose|apriltag_detector_(create|destroy|detect)" || true
       - uses: actions/upload-artifact@v4
